@@ -25,8 +25,8 @@ def get_source():
     if not market_data_type:
         data = 'the type query parameter is not provided'
     elif market_data_type == 'day-ahead':
-        data = json_object
-    return json.dumps(data)
+        data = json.dumps(json_object)
+    return data
 
 
 if __name__ == "__main__":
