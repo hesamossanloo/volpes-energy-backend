@@ -1,27 +1,32 @@
-import os
 import json
-import urllib.request
+import os
 
 from flask import Flask
 from flask import request
+from markupsafe import escape
 
 app = Flask(__name__)
-# Hesam was here
-@app.route("/")
-def hello_world():
-    address = request.args.get('address', 'not_provided')
-    return "CICD is setup now...Getting smart contract for {}!".format(address)
 
-@app.route("/getsource")
+
+@app.route('/')
+def hello_world():
+    return 'Welcome to Volpes Energy. The API is working. Yay!'
+
+
+@app.route('/marketdata')
 def get_source():
-    address = request.args.get('address', 'not_provided')
-    url = "https://api.etherscan.io/api?module=contract&action=getsourcecode&address={ADDR}&apikey={KEY}".format(**{
-        'ADDR': address,
-        'KEY': os.environ['ETHERSCAN_KEY']
-    })
-    f = urllib.request.urlopen(url)
-    data = json.loads(f.read())
-    return data['result'][0]['SourceCode']
+    market_data_type = request.args.get('type', 'not_provided')
+    data = 'the provided query string, type={}, is not supported'.format(escape(market_data_type))
+
+    f = open("mockdata/day-ahead.json", "rb")
+    json_object = json.load(f)
+    f.close()
+
+    if not market_data_type:
+        data = 'the type query parameter is not provided'
+    elif market_data_type == 'day-ahead':
+        data = json_object
+    return json.dumps(data)
 
 
 if __name__ == "__main__":
