@@ -10,7 +10,7 @@ app = Flask(__name__)
 @app.route("/")
 def hello_world():
     address = request.args.get('address', 'not_provided')
-    return "The demo runs too long...Getting smart contract for {}!".format(address)
+    return "CICD is setup now...Getting smart contract for {}!".format(address)
 
 @app.route("/getsource")
 def get_source():
