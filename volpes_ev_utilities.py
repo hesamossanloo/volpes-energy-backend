@@ -3,7 +3,7 @@ import numpy as np
 
 # TODO: Please delete this for the final demo
 PATH_TO_GLPK = 'C:\\Users\\tbors\\anaconda3\\Library\\bin\\glpsol.exe'
-LOCAL = True
+LOCAL = False
 
 
 """ OPTIMAL EV DISPATCH """
