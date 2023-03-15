@@ -270,7 +270,7 @@ def ortoolstest():
     print('x =', x.solution_value())
     print('y =', y.solution_value())
 
-    return x.solution_value()
+    return '{}, {}'.format(x.solution_value(), y.solution_value())
 
 
 if __name__ == "__main__":
