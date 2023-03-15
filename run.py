@@ -201,7 +201,7 @@ def ev_optimal_dispatch():
 
     # pretty print
     # ev_optimiser = pyo.SolverFactory('glpk', executable=PATH_TO_GLPK)
-    ev_optimiser = pyo.SolverFactory('glpk')
+    ev_optimiser = pyo.SolverFactory('glpk', executable='/usr/bin/glpsol')
 
     ev_solution = ev_optimiser.solve(ev_model)
 

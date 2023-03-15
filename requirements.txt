@@ -4,7 +4,7 @@ gunicorn==20.1.0
 pandas==1.5.3
 pyomo==6.5.0
 numpy==1.24.0
-glpk==0.4.7
+# glpk==0.4.7
 
 #google-cloud==0.34.0
 #google-cloud-secret-manager==2.1.0
