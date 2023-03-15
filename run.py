@@ -1,5 +1,6 @@
 import json
 import os
+import requests
 
 import numpy as np
 import pandas as pd
@@ -11,7 +12,7 @@ from markupsafe import escape
 
 # TODO: Please delete this for the final demo
 PATH_TO_GLPK = 'C:\\Users\\tbors\\anaconda3\\Library\\bin\\glpsol.exe'
-LOCAL = True
+LOCAL = False
 
 app = Flask(__name__)
 
@@ -335,6 +336,11 @@ def ev_dispatcher():
     # market_data_type = request.args.get("type", "not_provided")
     # data = "the provided query string, type={}, is not supported".format(escape(market_data_type))
 
+    # TODO: more hardcoded stuff
+    PRICEZONE = 'Oslo'
+    STARTTIME = '2022-12-12 12:00'
+    ENDTIME = '2022-12-13 12:00'
+
     # TODO: GET FROM WEB INTERFACE
     df_trucks = pd.read_json('./mockdata/truck_data.json')
     number_of_trucks = df_trucks.shape[1]
@@ -345,12 +351,14 @@ def ev_dispatcher():
     arrival_soc = df_trucks.loc['Arrival_SoC', :].values.astype(float)
     departure_soc = df_trucks.loc['Departure_SoC', :].values.astype(float)
 
-    # TODO: READ FROM DATA SOURCE
-    prices = [
-        475.74, 468.79, 491.36, 520.19, 542.35, 571.04, 541.34, 493.3,
-        473.79, 396.22, 347.76, 304.12, 296.83, 279.18, 276.44, 268.4,
-        273.55, 306.91, 356.83, 484.21, 555.18, 537.25, 503.05, 490.51,
-        468.78]  # Oslo 2022-12-12 12:00 to 2022-12-13 12:00
+    # read power prices
+    url = 'https://volpes-energy-backend-fiiwhtua3a-ew.a.run.app/marketdata?type=day-ahead'
+    params = dict(type='day-ahead')
+    resp = requests.get(url=url, params=params)
+
+    price_df = pd.DataFrame(resp.json())
+    price_df.index = pd.date_range(start='2022/12/12 00:00', freq='h', periods=48, tz='CET')
+    prices = price_df.loc[STARTTIME:ENDTIME, PRICEZONE].astype('float').values
 
     # TODO: READ FROM DATA SOURCE [NOT FOR HACKATHON?]
     residual_load = [
@@ -360,15 +368,17 @@ def ev_dispatcher():
     # TODO: FIX/ REMOVE HARDCODED PARAMETERS
     k_max = 24
     p_total_max = 600
-    t_0 = pd.to_datetime('2022-12-12 12:00')
+    t_0 = pd.to_datetime(STARTTIME)
 
     ev_model, ev_opt, ev_solution = ev_optimal_dispatch(
-        price=prices, k_max=k_max, t_0=t_0,
+        price=prices,
+        k_max=k_max, t_0=t_0,
         arrival_time=arrival_time, departure_time=departure_time, arrival_soc=arrival_soc, departure_soc=departure_soc,
         number_of_trucks=number_of_trucks, p_max=p_max, soc_max=soc_max, p_total_max=p_total_max, residual_load=residual_load)
 
     ev_dumb_model, ev_dumb_opt, ev_dumb_solution = dumb_dispatch_model_EV_fleet(
-        price=prices, k_max=k_max, t_0=t_0,
+        price=prices,
+        k_max=k_max, t_0=t_0,
         arrival_time=arrival_time, departure_time=departure_time, arrival_soc=arrival_soc, departure_soc=departure_soc,
         number_of_trucks=number_of_trucks, p_max=p_max, soc_max=soc_max, p_total_max=p_total_max, residual_load=residual_load)
 
@@ -386,6 +396,7 @@ def ev_dispatcher():
     df_ev_dispatch = df_ev_dispatch.unstack(level=-1)
     # add residual load
     df_ev_dispatch['residual_load'] = pd.DataFrame.from_dict(ev_model.residual_load.extract_values(), orient='index')
+    df_ev_dispatch.index = price_df.loc[STARTTIME:ENDTIME, :].index
 
     df_dumb = pd.DataFrame()
     df_dumb['P_in'] = pd.DataFrame.from_dict(ev_dumb_model.P_in.extract_values(), orient='index').abs()
@@ -394,8 +405,7 @@ def ev_dispatcher():
 
     savings = (1 - sum(df_ev_dispatch[['P_in']].sum(axis=1) * prices) / sum(df_dumb[['P_in']].sum(axis=1) * prices)) * 100
 
-    return {'input': json.loads(df_trucks.to_json()),
-            'power': json.loads(df_ev_dispatch['P_in'].to_json()),
+    return {'power': json.loads(df_ev_dispatch['P_in'].to_json()),  # 'input': json.loads(df_trucks.to_json()),
             'savings': '{:2.1f}%'.format(savings)}
 
 
