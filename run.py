@@ -8,8 +8,8 @@ from flask import Flask
 from flask import request
 from google.cloud import secretmanager
 from markupsafe import escape
-from ortools.linear_solver import pywraplp
 
+# TODO: Please delete this for the final demo
 # PATH_TO_GLPK = 'C:\\Users\\tbors\\anaconda3\\Library\\bin\\glpsol.exe'
 
 app = Flask(__name__)
