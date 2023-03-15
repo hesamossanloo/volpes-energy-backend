@@ -11,6 +11,7 @@ from markupsafe import escape
 
 # TODO: Please delete this for the final demo
 PATH_TO_GLPK = 'C:\\Users\\tbors\\anaconda3\\Library\\bin\\glpsol.exe'
+LOCAL = True
 
 app = Flask(__name__)
 
@@ -149,8 +150,10 @@ def ev_optimal_dispatch(price, k_max, t_0,
         return pyo.summation(model.c, model.P_total)
 
     ev_model.revenue = pyo.Objective(rule=cost_function, sense=pyo.minimize)
-    ev_optimiser = pyo.SolverFactory('glpk')
-    # ev_optimiser = pyo.SolverFactory('glpk', executable=PATH_TO_GLPK)
+    if LOCAL:
+        ev_optimiser = pyo.SolverFactory('glpk', executable=PATH_TO_GLPK)
+    else:
+        ev_optimiser = pyo.SolverFactory('glpk')
 
     ev_solution = ev_optimiser.solve(ev_model)
 
@@ -291,8 +294,10 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
 
     # SOLVE
     # select and run solver
-    # ev_optimiser = pyo.SolverFactory('glpk', executable=PATH_TO_GLPK)
-    ev_optimiser = pyo.SolverFactory('glpk')
+    if LOCAL:
+        ev_optimiser = pyo.SolverFactory('glpk', executable=PATH_TO_GLPK)
+    else:
+        ev_optimiser = pyo.SolverFactory('glpk')
     ev_solution = ev_optimiser.solve(ev_model)
 
     return ev_model, ev_optimiser, ev_solution
@@ -331,7 +336,7 @@ def ev_dispatcher():
     # data = "the provided query string, type={}, is not supported".format(escape(market_data_type))
 
     # TODO: GET FROM WEB INTERFACE
-    df_trucks = pd.read_csv('./mockdata/truck_data-5_trucks.csv', index_col=0)
+    df_trucks = pd.read_json('./mockdata/truck_data.json')
     number_of_trucks = df_trucks.shape[1]
     p_max = df_trucks.loc['P_max', :].values.astype(float)
     soc_max = df_trucks.loc['SoC_max', :].values.astype(float)
@@ -341,7 +346,7 @@ def ev_dispatcher():
     departure_soc = df_trucks.loc['Departure_SoC', :].values.astype(float)
 
     # TODO: READ FROM DATA SOURCE
-    price = [
+    prices = [
         475.74, 468.79, 491.36, 520.19, 542.35, 571.04, 541.34, 493.3,
         473.79, 396.22, 347.76, 304.12, 296.83, 279.18, 276.44, 268.4,
         273.55, 306.91, 356.83, 484.21, 555.18, 537.25, 503.05, 490.51,
@@ -358,12 +363,12 @@ def ev_dispatcher():
     t_0 = pd.to_datetime('2022-12-12 12:00')
 
     ev_model, ev_opt, ev_solution = ev_optimal_dispatch(
-        price=price, k_max=k_max, t_0=t_0,
+        price=prices, k_max=k_max, t_0=t_0,
         arrival_time=arrival_time, departure_time=departure_time, arrival_soc=arrival_soc, departure_soc=departure_soc,
         number_of_trucks=number_of_trucks, p_max=p_max, soc_max=soc_max, p_total_max=p_total_max, residual_load=residual_load)
 
     ev_dumb_model, ev_dumb_opt, ev_dumb_solution = dumb_dispatch_model_EV_fleet(
-        price=price, k_max=k_max, t_0=t_0,
+        price=prices, k_max=k_max, t_0=t_0,
         arrival_time=arrival_time, departure_time=departure_time, arrival_soc=arrival_soc, departure_soc=departure_soc,
         number_of_trucks=number_of_trucks, p_max=p_max, soc_max=soc_max, p_total_max=p_total_max, residual_load=residual_load)
 
@@ -382,7 +387,17 @@ def ev_dispatcher():
     # add residual load
     df_ev_dispatch['residual_load'] = pd.DataFrame.from_dict(ev_model.residual_load.extract_values(), orient='index')
 
-    return df_ev_dispatch['P_in'].to_json()
+    df_dumb = pd.DataFrame()
+    df_dumb['P_in'] = pd.DataFrame.from_dict(ev_dumb_model.P_in.extract_values(), orient='index').abs()
+    df_dumb.index = pd.MultiIndex.from_tuples(df_dumb.index)
+    df_dumb = df_dumb.unstack(level=-1)
+
+    savings = (1 - sum(df_ev_dispatch[['P_in']].sum(axis=1) * prices) / sum(df_dumb[['P_in']].sum(axis=1) * prices)) * 100
+
+    return {'input': json.loads(df_trucks.to_json()),
+            'power': json.loads(df_ev_dispatch['P_in'].to_json()),
+            'savings': '{:2.1f}%'.format(savings)}
+
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
