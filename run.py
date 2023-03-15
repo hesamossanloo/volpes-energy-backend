@@ -1,29 +1,37 @@
-import os
 import json
-import urllib.request
+import os
 
 from flask import Flask
 from flask import request
+from markupsafe import escape
+from google.cloud import secretmanager
 
 import EV_dispatch_models
 
 app = Flask(__name__)
-# Theo was here
+
 @app.route("/")
 def hello_world():
-    address = request.args.get('address', 'not_provided')
-    return "The demo runs too long...Getting smart contract for {}!".format(address)
+    return "Welcome to Volpes Energy. The API is working. Yay!"
 
-@app.route("/getsource")
+
+@app.route("/marketdata")
 def get_source():
-    address = request.args.get('address', 'not_provided')
-    url = "https://api.etherscan.io/api?module=contract&action=getsourcecode&address={ADDR}&apikey={KEY}".format(**{
-        'ADDR': address,
-        'KEY': os.environ['ETHERSCAN_KEY']
-    })
-    f = urllib.request.urlopen(url)
-    data = json.loads(f.read())
-    return data['result'][0]['SourceCode']
+    market_data_type = request.args.get("type", "not_provided")
+    data = "the provided query string, type={}, is not supported".format(escape(market_data_type))
+
+    secrets = secretmanager.SecretManagerServiceClient()
+    SHOWING_WE_KNOW_HOW_TO_USE_SM = secrets.get_secret(request={"name": "projects/115358684500/secrets/SOMETHING_IMPORTANT/versions/1"})
+
+    f = open("mockdata/day-ahead.json", "rb")
+    json_object = json.load(f)
+    f.close()
+
+    if not market_data_type:
+        data = "the type query parameter is not provided. Hint: {}".format((SHOWING_WE_KNOW_HOW_TO_USE_SM.response.payload.data.decode("UTF-8")))
+    elif market_data_type == "day-ahead":
+        data = json.dumps(json_object)
+    return data
 
 
 if __name__ == "__main__":
