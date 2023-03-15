@@ -1,19 +1,16 @@
 import json
 import os
 
+import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
-import numpy as np
-
 from flask import Flask
 from flask import request
+from google.cloud import secretmanager
 from markupsafe import escape
-#from google.cloud import secretmanager
-
 from ortools.linear_solver import pywraplp
-from ortools.init import pywrapinit
 
-PATH_TO_GLPK = 'C:\\Users\\tbors\\anaconda3\\Library\\bin\\glpsol.exe'
+# PATH_TO_GLPK = 'C:\\Users\\tbors\\anaconda3\\Library\\bin\\glpsol.exe'
 
 app = Flask(__name__)
 
@@ -27,9 +24,11 @@ def get_source():
     market_data_type = request.args.get("type", "not_provided")
     data = "the provided query string, type={}, is not supported".format(escape(market_data_type))
 
-    #secrets = secretmanager.SecretManagerServiceClient()
-    #SHOWING_WE_KNOW_HOW_TO_USE_SM = secrets.get_secret(request={"name": "projects/115358684500/secrets/SOMETHING_IMPORTANT/versions/1"})
+    secrets = secretmanager.SecretManagerServiceClient()
+    SHOWING_WE_KNOW_HOW_TO_USE_SM = secrets.access_secret_version(
+        request={"name": "projects/115358684500/secrets/SOMETHING_IMPORTANT/versions/1"}).payload.data.decode("utf-8")
 
+    print(SHOWING_WE_KNOW_HOW_TO_USE_SM)
     f = open("mockdata/day-ahead.json", "rb")
     json_object = json.load(f)
     f.close()
@@ -66,16 +65,14 @@ def ev_optimal_dispatch():
         468.78]  # Oslo 2022-12-12 12:00 to 2022-12-13 12:00
 
     residual_load = [
-        219.85, 183.85, 172.75, 190.575, 200.875, 204.05, 168.15, 116.825, 95.6, 83.8, 76.075, 71.175, \
-        61.175, 52.525, 48.375, 49.775, 59.5, 66.8, 80.55, 115.3, 188.475, 229.125, 232.425, 239.2, \
+        219.85, 183.85, 172.75, 190.575, 200.875, 204.05, 168.15, 116.825, 95.6, 83.8, 76.075, 71.175, 61.175, 52.525, 48.375, 49.775, 59.5, 66.8, 80.55, 115.3, 188.475, 229.125, 232.425, 239.2,
         219.85]  # G0 winter 12:00-12:00
 
     k_max = 24
 
     p_total_max = 450
 
-    t_0=pd.to_datetime('2022-12-12 12:00')
-
+    t_0 = pd.to_datetime('2022-12-12 12:00')
 
     """
     :param price: list of power prices
@@ -109,11 +106,11 @@ def ev_optimal_dispatch():
 
     # number of buses or trucks t
     ev_model.t_max = pyo.Param(initialize=number_of_trucks)
-    ev_model.t = pyo.RangeSet(0, ev_model.t_max-1)
+    ev_model.t = pyo.RangeSet(0, ev_model.t_max - 1)
 
     # number of piecewise linear elements for charging
     ev_model.pl_max = pyo.Param(initialize=4)  # HARD CODED
-    ev_model.pl = pyo.RangeSet(0, ev_model.pl_max-1)
+    ev_model.pl = pyo.RangeSet(0, ev_model.pl_max - 1)
 
     # TRUCK CHARGING MODEL
     # variables (power in/ out, state of charge)
@@ -134,8 +131,8 @@ def ev_optimal_dispatch():
         ev_model.SoC[index].bounds = (0, soc_max[index[1]])
 
     for _, index in enumerate(ev_model.P_in_pl_index):
-        ev_model.P_in_pl[index].bounds = (0, p_max[index[1]]/4)  # HARD CODED
-        ev_model.P_out_pl[index].bounds = (0, p_max[index[1]]/4)  # HARD CODED
+        ev_model.P_in_pl[index].bounds = (0, p_max[index[1]] / 4)  # HARD CODED
+        ev_model.P_out_pl[index].bounds = (0, p_max[index[1]] / 4)  # HARD CODED
 
     # fix SoC before arrival and from departure
     for t in ev_model.t:
@@ -159,9 +156,9 @@ def ev_optimal_dispatch():
     # truck SoC evolution
     def soc_evolution(model, i, t):
         if i < model.k_max:
-            return model.SoC[i+1, t] == model.SoC[i, t] \
+            return model.SoC[i + 1, t] == model.SoC[i, t] \
                 + sum(ev_model.eta_in[p] * ev_model.P_in_pl[i, t, p] for p in ev_model.pl) \
-                - sum((1/ev_model.eta_out[p]) * ev_model.P_out_pl[i, t, p] for p in ev_model.pl)
+                - sum((1 / ev_model.eta_out[p]) * ev_model.P_out_pl[i, t, p] for p in ev_model.pl)
         else:
             return pyo.Constraint.Skip
 
@@ -203,34 +200,36 @@ def ev_optimal_dispatch():
     ev_model.revenue = pyo.Objective(rule=cost_function, sense=pyo.minimize)
 
     # pretty print
+    ev_optimiser = pyo.SolverFactory('glpk')
     # ev_optimiser = pyo.SolverFactory('glpk', executable=PATH_TO_GLPK)
-    ev_optimiser = pyo.SolverFactory('ipopt')
+    # ev_optimiser = pyo.SolverFactory('ipopt')
 
     ev_solution = ev_optimiser.solve(ev_model)
 
     # COLLECT OUTPUT
     # initiate data frames
-    df_EV_dispatch = pd.DataFrame()
+    df_ev_dispatch = pd.DataFrame()
 
     # collect result data
-    df_EV_dispatch['SoC'] = pd.DataFrame.from_dict(ev_model.SoC.extract_values(), orient='index', columns=[str(ev_model.SoC)])
-    df_EV_dispatch['P_in'] = pd.DataFrame.from_dict(ev_model.P_in.extract_values(), orient='index')
-    df_EV_dispatch['P_out'] = pd.DataFrame.from_dict(ev_model.P_out.extract_values(), orient='index')
+    df_ev_dispatch['SoC'] = pd.DataFrame.from_dict(ev_model.SoC.extract_values(), orient='index',
+                                                   columns=[str(ev_model.SoC)])
+    df_ev_dispatch['P_in'] = pd.DataFrame.from_dict(ev_model.P_in.extract_values(), orient='index')
+    df_ev_dispatch['P_out'] = pd.DataFrame.from_dict(ev_model.P_out.extract_values(), orient='index')
 
     # convert tuple index to multi index
-    df_EV_dispatch.index = pd.MultiIndex.from_tuples(df_EV_dispatch.index)
+    df_ev_dispatch.index = pd.MultiIndex.from_tuples(df_ev_dispatch.index)
 
     # unstack
-    df_EV_dispatch = df_EV_dispatch.unstack(level=-1)
+    df_ev_dispatch = df_ev_dispatch.unstack(level=-1)
 
     # add residual load
-    df_EV_dispatch['residual_load'] = pd.DataFrame.from_dict(ev_model.residual_load.extract_values(), orient='index')
+    df_ev_dispatch['residual_load'] = pd.DataFrame.from_dict(ev_model.residual_load.extract_values(), orient='index')
 
     # write output
-    # df_EV_dispatch[['P_in', 'residual_load']].to_csv('./out/test_P_in.csv')
+    # df_ev_dispatch[['P_in', 'residual_load']].to_csv('./out/test_P_in.csv')
 
     # plot...
-    df = df_EV_dispatch['P_in']
+    df = df_ev_dispatch['P_in']
     df = df.abs()
 
     return df.to_json()
@@ -238,7 +237,6 @@ def ev_optimal_dispatch():
 
 @app.route("/ortools_test")
 def ortoolstest():
-
     # Create the linear solver with the GLOP backend.
     solver = pywraplp.Solver.CreateSolver('GLOP')
     if not solver:
