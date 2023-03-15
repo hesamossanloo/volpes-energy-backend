@@ -149,8 +149,8 @@ def ev_optimal_dispatch(price, k_max, t_0,
         return pyo.summation(model.c, model.P_total)
 
     ev_model.revenue = pyo.Objective(rule=cost_function, sense=pyo.minimize)
-    # ev_optimiser = pyo.SolverFactory('glpk')
-    ev_optimiser = pyo.SolverFactory('glpk', executable=PATH_TO_GLPK)
+    ev_optimiser = pyo.SolverFactory('glpk')
+    # ev_optimiser = pyo.SolverFactory('glpk', executable=PATH_TO_GLPK)
 
     ev_solution = ev_optimiser.solve(ev_model)
 
@@ -291,7 +291,8 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
 
     # SOLVE
     # select and run solver
-    ev_optimiser = pyo.SolverFactory('glpk', executable=PATH_TO_GLPK)
+    # ev_optimiser = pyo.SolverFactory('glpk', executable=PATH_TO_GLPK)
+    ev_optimiser = pyo.SolverFactory('glpk')
     ev_solution = ev_optimiser.solve(ev_model)
 
     return ev_model, ev_optimiser, ev_solution
