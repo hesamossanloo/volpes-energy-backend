@@ -4,6 +4,9 @@ gunicorn==20.1.0
 pandas==1.5.3
 pyomo==6.5.0
 numpy==1.24.0
+ortools
+# cbcpy
+# ipopt==1.0.3
 # glpk==0.4.7
 
 #google-cloud==0.34.0
