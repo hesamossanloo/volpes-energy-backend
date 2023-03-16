@@ -49,9 +49,9 @@ def ev_dispatcher():
     STARTTIME = '2022-12-12 12:00'
     ENDTIME = '2022-12-13 12:00'
 
-    ## Set CORS headers for the preflight request
+    # Set CORS headers for the preflight request
     if request.method == 'OPTIONS':
-        ## Allows GET requests from any origin with the Content-Type
+        # Allows GET requests from any origin with the Content-Type
         headers = {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET',
@@ -61,7 +61,7 @@ def ev_dispatcher():
 
         return ('', 204, headers)
 
-    ## Set CORS headers for the main request
+    # Set CORS headers for the main request
     headers = {
         'Access-Control-Allow-Origin': '*'
     }
@@ -96,16 +96,17 @@ def ev_dispatcher():
     price_df.index = pd.date_range(start='2022/12/12 00:00', freq='h', periods=48, tz='CET')
     prices = price_df.loc[STARTTIME:ENDTIME, PRICEZONE].astype('float').values
 
-    # TODO: READ FROM DATA SOURCE [NOT FOR HACKATHON]
+    # TODO: READ FROM DATA SOURCE/ BUILD ML PREDICTION [NOT FOR HACKATHON]
     residual_load = [
         219.85, 183.85, 172.75, 190.575, 200.875, 204.05, 168.15, 116.825, 95.6, 83.8, 76.075, 71.175, 61.175, 52.525, 48.375, 49.775, 59.5, 66.8, 80.55, 115.3, 188.475, 229.125, 232.425, 239.2,
         219.85]  # G0 winter 12:00-12:00
 
-    # TODO: FIX/ REMOVE HARDCODED PARAMETERS
+    # TODO: FIX/ REMOVE HARDCODED PARAMETERS [NOT FOR HACKATHON]
     k_max = 24
     p_total_max = 600
     t_0 = pd.to_datetime(STARTTIME)
 
+    # RUN MODELS
     ev_model, ev_opt, ev_solution = vu.ev_optimal_dispatch(
         price=prices,
         k_max=k_max, t_0=t_0,
@@ -148,7 +149,7 @@ def ev_dispatcher():
     # convert DateTime index (returned as Epoch) to formatted string
     df_ev_dispatch.index = df_ev_dispatch.index.strftime('%Y-%m-%d %H:%M')
 
-    return ({'power': json.loads(df_ev_dispatch['P_in'].to_json()),  # 'input': json.loads(df_trucks.to_json()),
+    return ({'power': json.loads(df_ev_dispatch['P_in'].T.to_json()),  # 'input': json.loads(df_trucks.to_json()),
             'unserved demand': json.loads(pd.DataFrame.from_dict(ev_model.SoC_slack.extract_values(), orient='index').to_json()),
             'savings': '{:2.1f}%'.format(savings),
             'secret url': url}, 200, headers)

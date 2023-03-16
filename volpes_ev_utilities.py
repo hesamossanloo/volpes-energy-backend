@@ -7,14 +7,17 @@ LOCAL = False
 
 
 """ OPTIMAL EV DISPATCH """
+
+
 def ev_optimal_dispatch(price, k_max, t_0,
                         arrival_time, departure_time, arrival_soc, departure_soc,
                         number_of_trucks, p_max, soc_max,
                         p_total_max, residual_load,
-                        eta_in=[0.9, 0.89, 0.88, 0.87],
-                        eta_out=[0.9, 0.89, 0.88, 0.87],
+                        eta_in=[0.9, 0.895, 0.89, 0.885, 0.88, 0.875, 0.87],
+                        eta_out=[0.9, 0.895, 0.89, 0.885, 0.88, 0.875, 0.87],
                         time_step_s=3600):
     """
+    :param residual_load: inflexible demand at location
     :param price: list of power prices
     :param k_max: number of time steps considered
     :param t_0: time stamp of first time step (e.g., UTC, CET)
@@ -37,6 +40,10 @@ def ev_optimal_dispatch(price, k_max, t_0,
     assert (len(p_max) == number_of_trucks)
     assert (len(soc_max) == number_of_trucks)
 
+    # currently, piecewise linear only supported if both eta in and out are split the same way
+    assert (len(eta_in) == len(eta_out))
+    pl_max = len(eta_in)
+
     ev_model = pyo.ConcreteModel()
 
     # INDEX SETS
@@ -49,7 +56,7 @@ def ev_optimal_dispatch(price, k_max, t_0,
     ev_model.t = pyo.RangeSet(0, ev_model.t_max - 1)
 
     # number of piecewise linear elements for charging
-    ev_model.pl_max = pyo.Param(initialize=4)  # HARD CODED
+    ev_model.pl_max = pyo.Param(initialize=pl_max)
     ev_model.pl = pyo.RangeSet(0, ev_model.pl_max - 1)
 
     # TRUCK CHARGING MODEL
@@ -72,8 +79,8 @@ def ev_optimal_dispatch(price, k_max, t_0,
         ev_model.SoC[index].bounds = (0, soc_max[index[1]])
 
     for _, index in enumerate(ev_model.P_in_pl_index):
-        ev_model.P_in_pl[index].bounds = (0, p_max[index[1]] / 4)  # HARD CODED
-        ev_model.P_out_pl[index].bounds = (0, p_max[index[1]] / 4)  # HARD CODED
+        ev_model.P_in_pl[index].bounds = (0, p_max[index[1]] / ev_model.pl_max)
+        ev_model.P_out_pl[index].bounds = (0, p_max[index[1]] / ev_model.pl_max)
 
     # fix SoC before arrival and from departure
     def soc_slack_rule(model, i, t):
@@ -165,7 +172,7 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
     """
 
     :param price: list of power prices
-    :param K_max: number of time steps considered
+    :param k_max: number of time steps considered
     :param t_0: time stamp of first time step (e.g., UTC, CET)
     :param arrival_time: list of EV arrival times
     :param departure_time: list of EV expected departure times
@@ -173,8 +180,8 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
     :param departure_soc: list of EV required State of Charge at departure
     :param number_of_trucks: number of EVs
     :param p_max: list of maximum charging/ discharging power of each EV
-    :param SoC_max: list of battery capacity of each EV
-    :param P_total_max: total maximum available power at this location
+    :param soc_max: list of battery capacity of each EV
+    :param p_total_max: total maximum available power at this location
     :param eta_in: efficiency when charging, default 90%. Lower efficiency at higher charging speeds, model as
         piecewise linear
     :param eta_out: efficiency when discharging, default 90%. Lower efficiency at higher charging speeds, model
@@ -185,6 +192,10 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
 
     assert (len(p_max) == number_of_trucks)
     assert (len(soc_max) == number_of_trucks)
+
+    # currently, piecewise linear only supported if both eta in and out are split the same way
+    assert (len(eta_in) == len(eta_out))
+    pl_max = len(eta_in)
 
     ev_model = pyo.ConcreteModel()
 
@@ -198,7 +209,7 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
     ev_model.t = pyo.RangeSet(0, ev_model.t_max-1)
 
     # number of piecewise linear elements for charging
-    ev_model.pl_max = pyo.Param(initialize=4)  # HARD CODED
+    ev_model.pl_max = pyo.Param(initialize=pl_max)  # HARD CODED
     ev_model.pl = pyo.RangeSet(0, ev_model.pl_max-1)
 
     # TRUCK CHARGING MODEL
@@ -221,8 +232,8 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
         ev_model.SoC[index].bounds = (0, soc_max[index[1]])
 
     for _, index in enumerate(ev_model.P_in_pl_index):
-        ev_model.P_in_pl[index].bounds = (0, p_max[index[1]]/4)  # HARD CODED
-        ev_model.P_out_pl[index].bounds = (0, p_max[index[1]]/4)  # HARD CODED
+        ev_model.P_in_pl[index].bounds = (0, p_max[index[1]]/ev_model.pl_max)
+        ev_model.P_out_pl[index].bounds = (0, p_max[index[1]]/ev_model.pl_max)
 
     # fix SoC before arrival and from departure
     def soc_slack_rule(model, i, t):
