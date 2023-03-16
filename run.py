@@ -145,6 +145,9 @@ def ev_dispatcher():
 
     savings = (1 - sum(df_ev_dispatch[['P_in']].sum(axis=1) * prices) / sum(df_dumb[['P_in']].sum(axis=1) * prices)) * 100
 
+    # convert DateTime index (returned as Epoch) to formatted string
+    df_ev_dispatch.index = df_ev_dispatch.index.strftime('%Y-%m-%d %H:%M')
+
     return ({'power': json.loads(df_ev_dispatch['P_in'].to_json()),  # 'input': json.loads(df_trucks.to_json()),
             'unserved demand': json.loads(pd.DataFrame.from_dict(ev_model.SoC_slack.extract_values(), orient='index').to_json()),
             'savings': '{:2.1f}%'.format(savings),
