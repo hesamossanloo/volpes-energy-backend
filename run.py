@@ -67,7 +67,15 @@ def ev_dispatcher():
     departure_soc = df_trucks.loc['Departure_SoC', :].values.astype(float)
 
     # read power prices
-    url = 'https://volpes-energy-backend-fiiwhtua3a-ew.a.run.app/marketdata?type=day-ahead'
+    # TODO: REMOVE LOCAL/ CLOUD FLAG BEFORE DEMO
+    if vu.LOCAL:
+        secrets = secretmanager.SecretManagerServiceClient()
+        url = secrets.access_secret_version(
+            request={"name": "projects/115358684500/secrets/VOLPES_MARKET_DATA_URL/versions/1"}).payload.data.decode(
+            "utf-8")
+    else:
+        url = 'https://volpes-energy-backend-fiiwhtua3a-ew.a.run.app/marketdata?type=day-ahead'
+
     params = dict(type='day-ahead')
     resp = requests.get(url=url, params=params)
 
@@ -75,7 +83,7 @@ def ev_dispatcher():
     price_df.index = pd.date_range(start='2022/12/12 00:00', freq='h', periods=48, tz='CET')
     prices = price_df.loc[STARTTIME:ENDTIME, PRICEZONE].astype('float').values
 
-    # TODO: READ FROM DATA SOURCE [NOT FOR HACKATHON?]
+    # TODO: READ FROM DATA SOURCE [NOT FOR HACKATHON]
     residual_load = [
         219.85, 183.85, 172.75, 190.575, 200.875, 204.05, 168.15, 116.825, 95.6, 83.8, 76.075, 71.175, 61.175, 52.525, 48.375, 49.775, 59.5, 66.8, 80.55, 115.3, 188.475, 229.125, 232.425, 239.2,
         219.85]  # G0 winter 12:00-12:00
