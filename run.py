@@ -146,6 +146,7 @@ def ev_dispatcher():
     savings = (1 - sum(df_ev_dispatch[['P_in']].sum(axis=1) * prices) / sum(df_dumb[['P_in']].sum(axis=1) * prices)) * 100
 
     return ({'power': json.loads(df_ev_dispatch['P_in'].to_json()),  # 'input': json.loads(df_trucks.to_json()),
+            'unserved demand': json.loads(pd.DataFrame.from_dict(ev_model.SoC_slack.extract_values(), orient='index').to_json()),
             'savings': '{:2.1f}%'.format(savings),
             'secret url': url}, 200, headers)
 

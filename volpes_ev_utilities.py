@@ -63,6 +63,7 @@ def ev_optimal_dispatch(price, k_max, t_0,
     ev_model.eta_out = pyo.Param(ev_model.pl, initialize=eta_out)
 
     ev_model.SoC = pyo.Var(ev_model.k, ev_model.t, domain=pyo.NonNegativeReals)
+    ev_model.SoC_slack = pyo.Var(ev_model.t, domain=pyo.NonNegativeReals)
 
     # bounds
     for _, index in enumerate(ev_model.P_in_index):
@@ -75,6 +76,11 @@ def ev_optimal_dispatch(price, k_max, t_0,
         ev_model.P_out_pl[index].bounds = (0, p_max[index[1]] / 4)  # HARD CODED
 
     # fix SoC before arrival and from departure
+    def soc_slack_rule(model, i, t):
+        return model.SoC[i, t] + model.SoC_slack[t] >= departure_soc[t]
+
+    ev_model.soc_slack_constraint = pyo.ConstraintList()
+
     for t in ev_model.t:
         arrival_after = arrival_time[t] - t_0
         arrival_index = np.floor(arrival_after.seconds / time_step_s)
@@ -84,14 +90,16 @@ def ev_optimal_dispatch(price, k_max, t_0,
         for k in ev_model.k:
             # if before arrival
             if k < arrival_index:
+                # set SoC at arrival and prevent charging
                 ev_model.SoC[k, t].fix(arrival_soc[t])
+                ev_model.P_in[k, t].fix(0)
+                ev_model.P_out[k, t].fix(0)
             if k >= departure_index:
-                ev_model.SoC[k, t].fix(departure_soc[t])
-
-    # ignore last charging time step (set charging power to zero)
-    for t in ev_model.t:
-        ev_model.P_in[k_max, t].fix(0)
-        ev_model.P_out[k_max, t].fix(0)
+                # prevent charging after departure
+                ev_model.P_in[k, t].fix(0)
+                ev_model.P_out[k, t].fix(0)
+            if k == departure_index:
+                ev_model.soc_slack_constraint.add(ev_model.SoC[k, t] + ev_model.SoC_slack[t] >= departure_soc[t])
 
     # truck SoC evolution
     def soc_evolution(model, i, t):
@@ -135,7 +143,7 @@ def ev_optimal_dispatch(price, k_max, t_0,
 
     # cost function
     def cost_function(model):
-        return pyo.summation(model.c, model.P_total)
+        return pyo.summation(model.c, model.P_total) + 1000000*pyo.summation(model.SoC_slack)
 
     ev_model.revenue = pyo.Objective(rule=cost_function, sense=pyo.minimize)
     if LOCAL:
@@ -204,6 +212,7 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
     ev_model.eta_out = pyo.Param(ev_model.pl, initialize=eta_out)
 
     ev_model.SoC = pyo.Var(ev_model.k, ev_model.t, domain=pyo.NonNegativeReals)
+    ev_model.SoC_slack = pyo.Var(ev_model.t, domain=pyo.NonNegativeReals)
 
     # bounds
     for _, index in enumerate(ev_model.P_in_index):
@@ -216,6 +225,11 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
         ev_model.P_out_pl[index].bounds = (0, p_max[index[1]]/4)  # HARD CODED
 
     # fix SoC before arrival and from departure
+    def soc_slack_rule(model, i, t):
+        return model.SoC[i, t] + model.SoC_slack[t] >= departure_soc[t]
+
+    ev_model.soc_slack_constraint = pyo.ConstraintList()
+
     for t in ev_model.t:
         arrival_after = arrival_time[t] - t_0
         arrival_index = np.floor(arrival_after.seconds / time_step_s)
@@ -225,14 +239,16 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
         for k in ev_model.k:
             # if before arrival
             if k < arrival_index:
+                # set SoC at arrival and prevent charging
                 ev_model.SoC[k, t].fix(arrival_soc[t])
+                ev_model.P_in[k, t].fix(0)
+                ev_model.P_out[k, t].fix(0)
             if k >= departure_index:
-                ev_model.SoC[k, t].fix(departure_soc[t])
-
-    # ignore last charging time step (set charging power to zero)
-    for t in ev_model.t:
-        ev_model.P_in[k_max, t].fix(0)
-        ev_model.P_out[k_max, t].fix(0)
+                # prevent charging after departure
+                ev_model.P_in[k, t].fix(0)
+                ev_model.P_out[k, t].fix(0)
+            if k == departure_index:
+                ev_model.soc_slack_constraint.add(ev_model.SoC[k, t] + ev_model.SoC_slack[t] >= departure_soc[t])
 
     # truck SoC evolution
     def soc_evolution(model, i, t):
@@ -276,7 +292,7 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
 
     # cost function
     def cost_function(model):
-        return pyo.summation(model.SoC) - pyo.summation(model.P_total)
+        return pyo.summation(model.SoC) - pyo.summation(model.P_total) - 1000000 * pyo.summation(model.SoC_slack)
 
     ev_model.cost = pyo.Objective(rule=cost_function, sense=pyo.maximize)
 
