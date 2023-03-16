@@ -68,7 +68,7 @@ def ev_dispatcher():
 
     # read power prices
     # TODO: REMOVE LOCAL/ CLOUD FLAG BEFORE DEMO
-    if vu.LOCAL:
+    if not vu.LOCAL:
         secrets = secretmanager.SecretManagerServiceClient()
         url = secrets.access_secret_version(
             request={"name": "projects/115358684500/secrets/VOLPES_MARKET_DATA_URL/versions/1"}).payload.data.decode(
@@ -133,7 +133,8 @@ def ev_dispatcher():
     savings = (1 - sum(df_ev_dispatch[['P_in']].sum(axis=1) * prices) / sum(df_dumb[['P_in']].sum(axis=1) * prices)) * 100
 
     return {'power': json.loads(df_ev_dispatch['P_in'].to_json()),  # 'input': json.loads(df_trucks.to_json()),
-            'savings': '{:2.1f}%'.format(savings)}
+            'savings': '{:2.1f}%'.format(savings),
+            'secret url': url}
 
 
 if __name__ == "__main__":
