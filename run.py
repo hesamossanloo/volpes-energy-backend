@@ -149,7 +149,13 @@ def ev_dispatcher():
     # convert DateTime index (returned as Epoch) to formatted string
     df_ev_dispatch.index = df_ev_dispatch.index.strftime('%Y-%m-%d %H:%M')
 
-    return ({'power': json.loads(df_ev_dispatch['P_in'].T.to_json()),  # 'input': json.loads(df_trucks.to_json()),
+    df_P_in = df_ev_dispatch['P_in']
+    power_dict = {'power': {}}
+
+    for i in df_P_in.index:
+        power_dict['power'][i] = df_P_in.loc[i, :].to_list()
+
+    return ({'power': json.loads(json.dumps(power_dict)),  # 'input': json.loads(df_trucks.to_json()),
             'unserved demand': json.loads(pd.DataFrame.from_dict(ev_model.SoC_slack.extract_values(), orient='index').to_json()),
             'savings': '{:2.1f}%'.format(savings),
             'secret url': url}, 200, headers)
