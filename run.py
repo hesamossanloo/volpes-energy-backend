@@ -10,12 +10,9 @@ from markupsafe import escape
 
 """ UTIILITY FUNCTIONS """
 import volpes_ev_utilities as vu
-
 app = Flask(__name__)
 
 """ APP ROUTES """
-
-
 @app.route("/")
 def hello_world():
     return "Welcome to Volpes Energy. The API is working. Yay!"
@@ -57,9 +54,8 @@ def ev_dispatcher():
         # Allows GET requests from any origin with the Content-Type
         headers = {
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': '*',
+            'Access-Control-Allow-Methods': 'GET, POST',
             'Access-Control-Allow-Headers': '*',
-            'Access-Control-Allow-Credentials': 'true',
             'Access-Control-Max-Age': '3600'
         }
 
@@ -67,9 +63,9 @@ def ev_dispatcher():
 
     # Set CORS headers for the main request
     headers = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Credentials': 'true',
+        'Access-Control-Allow-Origin': '*'
     }
+
     # Receive truck data via post
     if request.method == 'POST':
         df_trucks = pd.read_json(json.dumps(request.json))
@@ -103,8 +99,7 @@ def ev_dispatcher():
 
     # TODO: READ FROM DATA SOURCE/ BUILD ML PREDICTION [NOT FOR HACKATHON]
     residual_load = [
-        219.85, 183.85, 172.75, 190.575, 200.875, 204.05, 168.15, 116.825, 95.6, 83.8, 76.075, 71.175, 61.175, 52.525,
-        48.375, 49.775, 59.5, 66.8, 80.55, 115.3, 188.475, 229.125, 232.425, 239.2,
+        219.85, 183.85, 172.75, 190.575, 200.875, 204.05, 168.15, 116.825, 95.6, 83.8, 76.075, 71.175, 61.175, 52.525, 48.375, 49.775, 59.5, 66.8, 80.55, 115.3, 188.475, 229.125, 232.425, 239.2,
         219.85]  # G0 winter 12:00-12:00
 
     # TODO: FIX/ REMOVE HARDCODED PARAMETERS [NOT FOR HACKATHON]
@@ -117,15 +112,13 @@ def ev_dispatcher():
         price=prices,
         k_max=k_max, t_0=t_0,
         arrival_time=arrival_time, departure_time=departure_time, arrival_soc=arrival_soc, departure_soc=departure_soc,
-        number_of_trucks=number_of_trucks, p_max=p_max, soc_max=soc_max, p_total_max=p_total_max,
-        residual_load=residual_load)
+        number_of_trucks=number_of_trucks, p_max=p_max, soc_max=soc_max, p_total_max=p_total_max, residual_load=residual_load)
 
     ev_dumb_model, ev_dumb_opt, ev_dumb_solution = vu.dumb_dispatch_model_EV_fleet(
         price=prices,
         k_max=k_max, t_0=t_0,
         arrival_time=arrival_time, departure_time=departure_time, arrival_soc=arrival_soc, departure_soc=departure_soc,
-        number_of_trucks=number_of_trucks, p_max=p_max, soc_max=soc_max, p_total_max=p_total_max,
-        residual_load=residual_load)
+        number_of_trucks=number_of_trucks, p_max=p_max, soc_max=soc_max, p_total_max=p_total_max, residual_load=residual_load)
 
     # COLLECT OUTPUT
     # initiate data frames
@@ -152,8 +145,7 @@ def ev_dispatcher():
     df_dumb.index = pd.MultiIndex.from_tuples(df_dumb.index)
     df_dumb = df_dumb.unstack(level=-1)
 
-    savings = (1 - sum(df_ev_dispatch[['P_in']].sum(axis=1) * prices) / sum(
-        df_dumb[['P_in']].sum(axis=1) * prices)) * 100
+    savings = (1 - sum(df_ev_dispatch[['P_in']].sum(axis=1) * prices) / sum(df_dumb[['P_in']].sum(axis=1) * prices)) * 100
 
     # convert DateTime index (returned as Epoch) to formatted string
     df_ev_dispatch.index = df_ev_dispatch.index.strftime('%Y-%m-%d %H:%M')
@@ -165,11 +157,9 @@ def ev_dispatcher():
         power_dict['power'][i] = df_P_in.loc[i, :].to_list()
 
     return ({'power': json.loads(json.dumps(power_dict)),  # 'input': json.loads(df_trucks.to_json()),
-             'unserved demand': json.loads(
-                 pd.DataFrame.from_dict(ev_model.SoC_slack.extract_values(), orient='index').to_json()),
-             'savings': '{:2.1f}%'.format(savings),
-             'secret url': url}, 200, headers)
-
+            'unserved demand': json.loads(pd.DataFrame.from_dict(ev_model.SoC_slack.extract_values(), orient='index').to_json()),
+            'savings': '{:2.1f}%'.format(savings),
+            'secret url': url}, 200, headers)
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
