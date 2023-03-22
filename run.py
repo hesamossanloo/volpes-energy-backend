@@ -4,6 +4,7 @@ import requests
 
 import pandas as pd
 from flask import Flask
+from flask_cors import CORS
 from flask import request
 from google.cloud import secretmanager
 from markupsafe import escape
@@ -12,6 +13,7 @@ from markupsafe import escape
 import volpes_ev_utilities as vu
 
 app = Flask(__name__)
+CORS(app)
 
 """ APP ROUTES """
 
