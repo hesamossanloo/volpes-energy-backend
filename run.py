@@ -54,7 +54,7 @@ def ev_dispatcher():
         # Allows GET requests from any origin with the Content-Type
         headers = {
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET',
+            'Access-Control-Allow-Methods': '*',
             'Access-Control-Allow-Headers': 'Content-Type',
             'Access-Control-Max-Age': '3600'
         }
