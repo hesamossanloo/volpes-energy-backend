@@ -55,23 +55,24 @@ def ev_dispatcher():
     ENDTIME = '2022-12-13 12:00'
 
     # Set CORS headers for the preflight request
-    if request.method == 'OPTIONS':
-        # Allows GET requests from any origin with the Content-Type
-        headers = {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': '*',
-            'Access-Control-Allow-Headers': '*',
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Max-Age': '3600'
-        }
-
-        return ('', 204, headers)
+    # if request.method == 'OPTIONS':
+    #     # Allows GET requests from any origin with the Content-Type
+    #     headers = {
+    #         'Access-Control-Allow-Origin': '*',
+    #         'Access-Control-Allow-Methods': '*',
+    #         'Access-Control-Allow-Headers': '*',
+    #         'Access-Control-Allow-Credentials': 'true',
+    #         'Access-Control-Max-Age': '3600'
+    #     }
+    #
+    #     return ('', 204, headers)
 
     # Set CORS headers for the main request
-    headers = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Credentials': 'true',
-    }
+    # headers = {
+    #     'Access-Control-Allow-Origin': '*',
+    #     'Access-Control-Allow-Credentials': 'true',
+    # }
+
     # Receive truck data via post
     if request.method == 'POST':
         df_trucks = pd.read_json(json.dumps(request.json))
@@ -170,7 +171,7 @@ def ev_dispatcher():
              'unserved demand': json.loads(
                  pd.DataFrame.from_dict(ev_model.SoC_slack.extract_values(), orient='index').to_json()),
              'savings': '{:2.1f}%'.format(savings),
-             'secret url': url}, 200, headers)
+             'secret url': url})
 
 
 if __name__ == "__main__":
