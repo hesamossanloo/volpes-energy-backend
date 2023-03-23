@@ -3,14 +3,15 @@ import os
 import requests
 
 import pandas as pd
-from flask import Flask
-from flask import request
+from flask import Flask, request
+from flask_cors import CORS
 from google.cloud import secretmanager
 from markupsafe import escape
 
 """ UTIILITY FUNCTIONS """
 import volpes_ev_utilities as vu
 app = Flask(__name__)
+CORS(app)
 
 """ APP ROUTES """
 @app.route("/")
@@ -48,23 +49,6 @@ def ev_dispatcher():
     PRICEZONE = 'Oslo'
     STARTTIME = '2022-12-12 12:00'
     ENDTIME = '2022-12-13 12:00'
-
-    # Set CORS headers for the preflight request
-    if request.method == 'OPTIONS':
-        # Allows GET requests from any origin with the Content-Type
-        headers = {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST',
-            'Access-Control-Allow-Headers': '*',
-            'Access-Control-Max-Age': '3600'
-        }
-
-        return ('', 204, headers)
-
-    # Set CORS headers for the main request
-    headers = {
-        'Access-Control-Allow-Origin': '*'
-    }
 
     # Receive truck data via post
     if request.method == 'POST':
@@ -159,7 +143,7 @@ def ev_dispatcher():
     return ({'power': json.loads(json.dumps(power_dict)),  # 'input': json.loads(df_trucks.to_json()),
             'unserved demand': json.loads(pd.DataFrame.from_dict(ev_model.SoC_slack.extract_values(), orient='index').to_json()),
             'savings': '{:2.1f}%'.format(savings),
-            'secret url': url}, 200, headers)
+            'secret url': url})
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
