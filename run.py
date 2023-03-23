@@ -88,7 +88,7 @@ def ev_dispatcher():
             request={"name": "projects/115358684500/secrets/VOLPES_MARKET_DATA_URL/versions/1"}).payload.data.decode(
             "utf-8")
     else:
-        url = 'https://cd-volpes-backend-container-fiiwhtua3a-ew.a.run.app/marketdata?type=day-ahead'
+        url = 'https://volpes-energy-backend-fiiwhtua3a-ew.a.run.app/marketdata?type=day-ahead'
 
     params = dict(type='day-ahead')
     resp = requests.get(url=url, params=params)
