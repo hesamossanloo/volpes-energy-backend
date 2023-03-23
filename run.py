@@ -11,7 +11,7 @@ from markupsafe import escape
 """ UTIILITY FUNCTIONS """
 import volpes_ev_utilities as vu
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 """ APP ROUTES """
 @app.route("/")
