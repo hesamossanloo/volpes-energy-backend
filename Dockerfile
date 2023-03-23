@@ -8,18 +8,18 @@ FROM nanozoo/glpk:5.0--32b2e9b
 ENV PYTHONUNBUFFERED True
 
 # Copy local code to the container image.
-ENV APP_HOME /app
-WORKDIR $APP_HOME
+WORKDIR /app
 
 COPY requirements.txt requirements.txt
 
 # Install production dependencies.
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install -r requirements.txt
 
-COPY . ./
+COPY . .
 # Run the web service on container startup. Here we use the gunicorn
 # webserver, with one worker process and 8 threads.
 # For environments with multiple CPU cores, increase the number of workers
 # to be equal to the cores available.
 # Timeout is set to 0 to disable the timeouts of the workers to allow Cloud Run to handle instance scaling.
-CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 run:app
+#CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 run:app
+CMD ["python3", "run.py"]
