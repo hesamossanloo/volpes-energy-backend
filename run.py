@@ -3,7 +3,8 @@ import os
 import requests
 
 import pandas as pd
-from flask import Flask, request
+from flask import Flask
+from flask import request
 from google.cloud import secretmanager
 from markupsafe import escape
 
@@ -54,7 +55,7 @@ def ev_dispatcher():
         headers = {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST',
-            'Access-Control-Allow-Headers': '*',
+            'Access-Control-Allow-Headers': 'Content-Type',
             'Access-Control-Max-Age': '3600'
         }
 
@@ -87,7 +88,7 @@ def ev_dispatcher():
             request={"name": "projects/115358684500/secrets/VOLPES_MARKET_DATA_URL/versions/1"}).payload.data.decode(
             "utf-8")
     else:
-        url = 'https://volpes-energy-backend-fiiwhtua3a-ew.a.run.app/marketdata?type=day-ahead'
+        url = 'https://cd-volpes-backend-container-fiiwhtua3a-ew.a.run.app/marketdata?type=day-ahead'
 
     params = dict(type='day-ahead')
     resp = requests.get(url=url, params=params)
@@ -158,7 +159,7 @@ def ev_dispatcher():
     return ({'power': json.loads(json.dumps(power_dict)),  # 'input': json.loads(df_trucks.to_json()),
             'unserved demand': json.loads(pd.DataFrame.from_dict(ev_model.SoC_slack.extract_values(), orient='index').to_json()),
             'savings': '{:2.1f}%'.format(savings),
-            'secret url': url}, 200 , headers)
+            'secret url': url}, 200, headers)
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
