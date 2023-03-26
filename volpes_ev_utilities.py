@@ -1,3 +1,4 @@
+import pandas as pd
 import pyomo.environ as pyo
 import numpy as np
 
@@ -13,8 +14,9 @@ def ev_optimal_dispatch(price, k_max, t_0,
                         arrival_time, departure_time, arrival_soc, departure_soc,
                         number_of_trucks, p_max, soc_max,
                         p_total_max, residual_load,
-                        eta_in=[0.9, 0.895, 0.89, 0.885, 0.88, 0.875, 0.87],
-                        eta_out=[0.9, 0.895, 0.89, 0.885, 0.88, 0.875, 0.87],
+                        eta_in=np.arange(0.9, 0.88, -(0.9-0.88)/3),
+                        eta_out=np.arange(0.9, 0.88, -(0.9-0.88)/3),
+                        V2G=False,
                         time_step_s=3600):
     """
     :param residual_load: inflexible demand at location
@@ -65,9 +67,10 @@ def ev_optimal_dispatch(price, k_max, t_0,
     ev_model.P_in_pl = pyo.Var(ev_model.k, ev_model.t, ev_model.pl, domain=pyo.NonNegativeReals)
     ev_model.eta_in = pyo.Param(ev_model.pl, initialize=eta_in)
 
-    ev_model.P_out = pyo.Var(ev_model.k, ev_model.t, domain=pyo.NonNegativeReals)
-    ev_model.P_out_pl = pyo.Var(ev_model.k, ev_model.t, ev_model.pl, domain=pyo.NonNegativeReals)
-    ev_model.eta_out = pyo.Param(ev_model.pl, initialize=eta_out)
+    if V2G:
+        ev_model.P_out = pyo.Var(ev_model.k, ev_model.t, domain=pyo.NonNegativeReals)
+        ev_model.P_out_pl = pyo.Var(ev_model.k, ev_model.t, ev_model.pl, domain=pyo.NonNegativeReals)
+        ev_model.eta_out = pyo.Param(ev_model.pl, initialize=eta_out)
 
     ev_model.SoC = pyo.Var(ev_model.k, ev_model.t, domain=pyo.NonNegativeReals)
     ev_model.SoC_slack = pyo.Var(ev_model.t, domain=pyo.NonNegativeReals)
@@ -75,12 +78,14 @@ def ev_optimal_dispatch(price, k_max, t_0,
     # bounds
     for _, index in enumerate(ev_model.P_in_index):
         ev_model.P_in[index].bounds = (0, p_max[index[1]])
-        ev_model.P_out[index].bounds = (0, p_max[index[1]])
         ev_model.SoC[index].bounds = (0, soc_max[index[1]])
+        if V2G:
+            ev_model.P_out[index].bounds = (0, p_max[index[1]])
 
     for _, index in enumerate(ev_model.P_in_pl_index):
         ev_model.P_in_pl[index].bounds = (0, p_max[index[1]] / ev_model.pl_max)
-        ev_model.P_out_pl[index].bounds = (0, p_max[index[1]] / ev_model.pl_max)
+        if V2G:
+            ev_model.P_out_pl[index].bounds = (0, p_max[index[1]] / ev_model.pl_max)
 
     # fix SoC before arrival and from departure
     def soc_slack_rule(model, i, t):
@@ -100,20 +105,26 @@ def ev_optimal_dispatch(price, k_max, t_0,
                 # set SoC at arrival and prevent charging
                 ev_model.SoC[k, t].fix(arrival_soc[t])
                 ev_model.P_in[k, t].fix(0)
-                ev_model.P_out[k, t].fix(0)
+                if V2G:
+                    ev_model.P_out[k, t].fix(0)
             if k >= departure_index:
                 # prevent charging after departure
                 ev_model.P_in[k, t].fix(0)
-                ev_model.P_out[k, t].fix(0)
+                if V2G:
+                    ev_model.P_out[k, t].fix(0)
             if k == departure_index:
                 ev_model.soc_slack_constraint.add(ev_model.SoC[k, t] + ev_model.SoC_slack[t] >= departure_soc[t])
 
     # truck SoC evolution
     def soc_evolution(model, i, t):
         if i < model.k_max:
-            return model.SoC[i + 1, t] == model.SoC[i, t] \
-                + sum(ev_model.eta_in[p] * ev_model.P_in_pl[i, t, p] for p in ev_model.pl) \
-                - sum((1 / ev_model.eta_out[p]) * ev_model.P_out_pl[i, t, p] for p in ev_model.pl)
+            if V2G:
+                return model.SoC[i + 1, t] == model.SoC[i, t] \
+                    + sum(ev_model.eta_in[p] * ev_model.P_in_pl[i, t, p] for p in ev_model.pl) \
+                    - sum((1 / ev_model.eta_out[p]) * ev_model.P_out_pl[i, t, p] for p in ev_model.pl)
+            else:
+                return model.SoC[i + 1, t] == model.SoC[i, t] \
+                    + sum(ev_model.eta_in[p] * ev_model.P_in_pl[i, t, p] for p in ev_model.pl)
         else:
             return pyo.Constraint.Skip
 
@@ -133,14 +144,18 @@ def ev_optimal_dispatch(price, k_max, t_0,
 
     def power_balance_rule(model, i):
         # Sum up the total power consumption at the location
-        return model.P_total[i] == sum(model.P_in[i, :]) - sum(model.P_out[i, :]) + model.residual_load[i]
+        if V2G:
+            return model.P_total[i] == sum(model.P_in[i, :]) - sum(model.P_out[i, :]) + model.residual_load[i]
+        else:
+            return model.P_total[i] == sum(model.P_in[i, :]) + model.residual_load[i]
 
     def total_power_limit_rule(model, i):
         # Limit the total power consumption
         return model.P_total[i] <= p_total_max
 
     ev_model.truck_power_in_constraint = pyo.Constraint(ev_model.k, ev_model.t, rule=truck_power_in_total_rule)
-    ev_model.truck_power_out_constraint = pyo.Constraint(ev_model.k, ev_model.t, rule=truck_power_out_total_rule)
+    if V2G:
+        ev_model.truck_power_out_constraint = pyo.Constraint(ev_model.k, ev_model.t, rule=truck_power_out_total_rule)
     ev_model.power_balance_constraint = pyo.Constraint(ev_model.k, rule=power_balance_rule)
     ev_model.power_limit_constraint = pyo.Constraint(ev_model.k, rule=total_power_limit_rule)
 
@@ -150,7 +165,7 @@ def ev_optimal_dispatch(price, k_max, t_0,
 
     # cost function
     def cost_function(model):
-        return pyo.summation(model.c, model.P_total) + 1000000*pyo.summation(model.SoC_slack)
+        return 0.001*pyo.summation(model.c, model.P_total) + 1000000*pyo.summation(model.SoC_slack)
 
     ev_model.revenue = pyo.Objective(rule=cost_function, sense=pyo.minimize)
     if LOCAL:
@@ -167,7 +182,7 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
                                  arrival_time, departure_time, arrival_soc, departure_soc,
                                  number_of_trucks, p_max, soc_max,
                                  p_total_max, residual_load,
-                                 eta_in=[0.9, 0.89, 0.88, 0.87], eta_out=[0.9, 0.89, 0.88, 0.87],
+                                 eta_in=np.arange(0.9, 0.88, -(0.9-0.88)/3),
                                  time_step_s=3600):
     """
 
@@ -193,8 +208,6 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
     assert (len(p_max) == number_of_trucks)
     assert (len(soc_max) == number_of_trucks)
 
-    # currently, piecewise linear only supported if both eta in and out are split the same way
-    assert (len(eta_in) == len(eta_out))
     pl_max = len(eta_in)
 
     ev_model = pyo.ConcreteModel()
@@ -218,22 +231,16 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
     ev_model.P_in_pl = pyo.Var(ev_model.k, ev_model.t, ev_model.pl, domain=pyo.NonNegativeReals)
     ev_model.eta_in = pyo.Param(ev_model.pl, initialize=eta_in)
 
-    ev_model.P_out = pyo.Var(ev_model.k, ev_model.t, domain=pyo.NonNegativeReals)
-    ev_model.P_out_pl = pyo.Var(ev_model.k, ev_model.t, ev_model.pl, domain=pyo.NonNegativeReals)
-    ev_model.eta_out = pyo.Param(ev_model.pl, initialize=eta_out)
-
     ev_model.SoC = pyo.Var(ev_model.k, ev_model.t, domain=pyo.NonNegativeReals)
     ev_model.SoC_slack = pyo.Var(ev_model.t, domain=pyo.NonNegativeReals)
 
     # bounds
     for _, index in enumerate(ev_model.P_in_index):
         ev_model.P_in[index].bounds = (0, p_max[index[1]])
-        ev_model.P_out[index].bounds = (0, p_max[index[1]])
         ev_model.SoC[index].bounds = (0, soc_max[index[1]])
 
     for _, index in enumerate(ev_model.P_in_pl_index):
         ev_model.P_in_pl[index].bounds = (0, p_max[index[1]]/ev_model.pl_max)
-        ev_model.P_out_pl[index].bounds = (0, p_max[index[1]]/ev_model.pl_max)
 
     # fix SoC before arrival and from departure
     def soc_slack_rule(model, i, t):
@@ -253,11 +260,9 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
                 # set SoC at arrival and prevent charging
                 ev_model.SoC[k, t].fix(arrival_soc[t])
                 ev_model.P_in[k, t].fix(0)
-                ev_model.P_out[k, t].fix(0)
             if k >= departure_index:
                 # prevent charging after departure
                 ev_model.P_in[k, t].fix(0)
-                ev_model.P_out[k, t].fix(0)
             if k == departure_index:
                 ev_model.soc_slack_constraint.add(ev_model.SoC[k, t] + ev_model.SoC_slack[t] >= departure_soc[t])
 
@@ -265,8 +270,7 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
     def soc_evolution(model, i, t):
         if i < model.k_max:
             return model.SoC[i+1, t] == model.SoC[i, t] \
-                + sum(ev_model.eta_in[p] * ev_model.P_in_pl[i, t, p] for p in ev_model.pl) \
-                - sum((1/ev_model.eta_out[p]) * ev_model.P_out_pl[i, t, p] for p in ev_model.pl)
+                + sum(ev_model.eta_in[p] * ev_model.P_in_pl[i, t, p] for p in ev_model.pl)
         else:
             return pyo.Constraint.Skip
 
@@ -280,20 +284,15 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
         # Sum up the piecewise linear elements charging the truck
         return model.P_in[i, t] == sum(model.P_in_pl[i, t, :])
 
-    def truck_power_out_total_rule(model, i, t):
-        # Sum up the piecewise linear elements discharging the truck
-        return model.P_out[i, t] == sum(model.P_out_pl[i, t, :])
-
     def power_balance_rule(model, i):
         # Sum up the total power consumption at the location
-        return model.P_total[i] == sum(model.P_in[i, :]) - sum(model.P_out[i, :]) + model.residual_load[i]
+        return model.P_total[i] == sum(model.P_in[i, :]) + model.residual_load[i]
 
     def total_power_limit_rule(model, i):
         # Limit the total power consumption
         return model.P_total[i] <= p_total_max
 
     ev_model.truck_power_in_constraint = pyo.Constraint(ev_model.k, ev_model.t, rule=truck_power_in_total_rule)
-    ev_model.truck_power_out_constraint = pyo.Constraint(ev_model.k, ev_model.t, rule=truck_power_out_total_rule)
     ev_model.power_balance_constraint = pyo.Constraint(ev_model.k, rule=power_balance_rule)
     ev_model.power_limit_constraint = pyo.Constraint(ev_model.k, rule=total_power_limit_rule)
 
@@ -316,3 +315,9 @@ def dumb_dispatch_model_EV_fleet(price, k_max, t_0,
     ev_solution = ev_optimiser.solve(ev_model)
 
     return ev_model, ev_optimiser, ev_solution
+
+
+def input_data_csv_to_json(filename='./mockdata/100_cars.csv', outfile='./mockdata/100cars.json'):
+    df = pd.read_csv(filename, index_col=0)
+    df.to_json(outfile)
+    return
