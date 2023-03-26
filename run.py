@@ -5,12 +5,14 @@ import requests
 import pandas as pd
 from flask import Flask
 from flask import request
+from flask_cors import CORS
 from google.cloud import secretmanager
 from markupsafe import escape
 
 """ UTIILITY FUNCTIONS """
 import volpes_ev_utilities as vu
 app = Flask(__name__)
+CORS(app)
 
 """ APP ROUTES """
 @app.route("/")
@@ -54,7 +56,7 @@ def ev_dispatcher():
         # Allows GET requests from any origin with the Content-Type
         headers = {
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET',
+            'Access-Control-Allow-Methods': 'GET, POST',
             'Access-Control-Allow-Headers': 'Content-Type',
             'Access-Control-Max-Age': '3600'
         }
@@ -65,6 +67,7 @@ def ev_dispatcher():
     headers = {
         'Access-Control-Allow-Origin': '*'
     }
+
     # Receive truck data via post
     if request.method == 'POST':
         df_trucks = pd.read_json(json.dumps(request.json))
